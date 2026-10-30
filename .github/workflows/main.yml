@@ -1,0 +1,63 @@
+
+name: Build Expense Manager APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate Android project
+        run: |
+          PACKAGE_FILE=$(find . -maxdepth 5 -type f -name package.json -not -path '*/node_modules/*' -print -quit)
+
+          if [ -z "$PACKAGE_FILE" ]; then
+            echo "ERROR: package.json not found"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$PACKAGE_FILE")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Found project at: $PROJECT_DIR"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          npm install
+
+      - name: Generate Android project
+        run: |
+          cd "$PROJECT_DIR"
+          npx expo prebuild --platform android --no-install
+
+      - name: Build release APK
+        run: |
+          cd "$PROJECT_DIR/android"
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Expense-Manager-APK
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          
